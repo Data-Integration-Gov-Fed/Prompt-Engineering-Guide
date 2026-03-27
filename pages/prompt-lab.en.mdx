@@ -1,0 +1,47 @@
+---
+title: Prompt Lab
+description: Paste any prompt and get instant AI-powered feedback — scores, issues, and an improved version.
+---
+
+import PromptAnalyzer from '../components/PromptAnalyzer';
+
+# Prompt Lab
+
+Paste any prompt below and get instant analysis powered by **Claude Opus 4.6**. The analyzer evaluates six key dimensions of prompt quality, identifies specific issues, and rewrites your prompt with all improvements applied.
+
+<PromptAnalyzer />
+
+---
+
+## How It Works
+
+The Prompt Lab uses Claude Opus 4.6 with adaptive thinking to evaluate your prompt against six dimensions of prompt engineering quality:
+
+| Dimension | What it measures |
+|---|---|
+| **Clarity** | Is the instruction clear and unambiguous? |
+| **Specificity** | Is the expected output precisely defined? |
+| **Context** | Is sufficient background provided? |
+| **Instruction Quality** | Are instructions logically structured and complete? |
+| **Format Guidance** | Does the prompt specify output format, length, or structure? |
+| **Role / Persona** | Does the prompt use role framing effectively? |
+
+Each dimension is scored 0–10, producing an overall score of 0–100 and a letter grade.
+
+## Tips for Higher Scores
+
+- **Be specific about output format**: "Return a JSON object with keys X and Y" scores far better than "give me the data"
+- **Set a persona when it matters**: "You are a senior DevOps engineer" helps Claude calibrate tone and depth
+- **Include constraints**: "In under 200 words" or "using only Python standard library" reduces ambiguity
+- **Add examples**: Even one input/output example ([few-shot prompting](/techniques/fewshot)) dramatically improves reliability
+- **Structure multi-part requests**: Use numbered steps or headers when asking Claude to do multiple things
+
+## What Makes a Great Prompt?
+
+Great prompts are precise without being rigid. They tell the model:
+1. **Who it is** (role/persona)
+2. **What to do** (clear task)
+3. **What the output should look like** (format + constraints)
+4. **What it should know** (relevant context)
+
+The Prompt Lab grades these qualities automatically — try the example prompts to see the difference between weak and strong prompts in practice.
