@@ -1,0 +1,295 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleName {
+  PLATFORM_ADMIN
+  WORKFLOW_DESIGNER
+  REVIEWER
+  REQUESTER
+  ANALYST
+}
+
+enum FieldType {
+  SHORT_TEXT
+  LONG_TEXT
+  NUMBER
+  EMAIL
+  DATE
+  DATETIME
+  BOOLEAN
+  SINGLE_SELECT
+  MULTI_SELECT
+  USER_PICKER
+}
+
+enum ConditionOperator {
+  EQUALS
+  NOT_EQUALS
+  GREATER_THAN
+  LESS_THAN
+  INCLUDES
+  NOT_INCLUDES
+  IS_EMPTY
+  IS_NOT_EMPTY
+  BEFORE
+  AFTER
+}
+
+enum LogicType {
+  AND
+  OR
+}
+
+enum RequestStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AuditEventType {
+  REQUEST_CREATED
+  REQUEST_SUBMITTED
+  REQUEST_UPDATED
+  STATE_CHANGED
+  COMMENT_ADDED
+  ASSIGNED
+  INVALID_TRANSITION_ATTEMPTED
+  WORKFLOW_VERSION_CREATED
+  WORKFLOW_VERSION_PUBLISHED
+  USER_ROLE_CHANGED
+  SLA_BREACHED
+  SLA_WARNING
+}
+
+model Role {
+  id          String                 @id @default(cuid())
+  name        RoleName               @unique
+  description String?
+  userRoles   UserRole[]
+  permissions TransitionPermission[]
+  createdAt   DateTime               @default(now())
+}
+
+model User {
+  id               String           @id @default(cuid())
+  email            String           @unique
+  password         String
+  name             String?
+  userRoles        UserRole[]
+  requests         Request[]        @relation("RequesterRequests")
+  assignedRequests Request[]        @relation("AssigneeRequests")
+  comments         RequestComment[]
+  auditEvents      AuditEvent[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, roleId])
+}
+
+model RequestType {
+  id               String            @id @default(cuid())
+  name             String
+  slug             String            @unique
+  description      String?
+  icon             String?
+  color            String?
+  workflowVersions WorkflowVersion[]
+  requests         Request[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model WorkflowVersion {
+  id               String               @id @default(cuid())
+  requestTypeId    String
+  version          Int
+  isPublished      Boolean              @default(false)
+  isActive         Boolean              @default(false)
+  publishedAt      DateTime?
+  changelog        String?
+  requestType      RequestType          @relation(fields: [requestTypeId], references: [id])
+  fieldDefinitions FieldDefinition[]
+  states           WorkflowState[]
+  transitions      WorkflowTransition[]
+  slaRules         SLARule[]
+  requests         Request[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@unique([requestTypeId, version])
+}
+
+model FieldDefinition {
+  id                String              @id @default(cuid())
+  workflowVersionId String
+  name              String
+  label             String
+  fieldType         FieldType
+  isRequired        Boolean             @default(false)
+  placeholder       String?
+  helpText          String?
+  options           String?
+  validationRules   String?
+  conditionalLogic  String?
+  sortOrder         Int                 @default(0)
+  workflowVersion   WorkflowVersion     @relation(fields: [workflowVersionId], references: [id], onDelete: Cascade)
+  fieldValues       RequestFieldValue[]
+  createdAt         DateTime            @default(now())
+}
+
+model WorkflowState {
+  id                String               @id @default(cuid())
+  workflowVersionId String
+  name              String
+  label             String
+  isInitial         Boolean              @default(false)
+  isFinal           Boolean              @default(false)
+  color             String?
+  sortOrder         Int                  @default(0)
+  workflowVersion   WorkflowVersion      @relation(fields: [workflowVersionId], references: [id], onDelete: Cascade)
+  fromTransitions   WorkflowTransition[] @relation("FromState")
+  toTransitions     WorkflowTransition[] @relation("ToState")
+  requests          Request[]
+  slaRules          SLARule[]
+  createdAt         DateTime             @default(now())
+}
+
+model WorkflowTransition {
+  id                 String                @id @default(cuid())
+  workflowVersionId  String
+  name               String
+  label              String
+  fromStateId        String
+  toStateId          String
+  requiresComment    Boolean               @default(false)
+  requiresAssignment Boolean               @default(false)
+  sortOrder          Int                   @default(0)
+  workflowVersion    WorkflowVersion       @relation(fields: [workflowVersionId], references: [id], onDelete: Cascade)
+  fromState          WorkflowState         @relation("FromState", fields: [fromStateId], references: [id])
+  toState            WorkflowState         @relation("ToState", fields: [toStateId], references: [id])
+  permissions        TransitionPermission[]
+  conditions         TransitionCondition[]
+  createdAt          DateTime              @default(now())
+}
+
+model TransitionPermission {
+  id           String             @id @default(cuid())
+  transitionId String
+  roleId       String
+  transition   WorkflowTransition @relation(fields: [transitionId], references: [id], onDelete: Cascade)
+  role         Role               @relation(fields: [roleId], references: [id])
+
+  @@unique([transitionId, roleId])
+}
+
+model TransitionCondition {
+  id           String             @id @default(cuid())
+  transitionId String
+  fieldName    String
+  operator     ConditionOperator
+  value        String?
+  groupId      String?
+  groupLogic   LogicType          @default(AND)
+  sortOrder    Int                @default(0)
+  transition   WorkflowTransition @relation(fields: [transitionId], references: [id], onDelete: Cascade)
+}
+
+model SLARule {
+  id                String          @id @default(cuid())
+  workflowVersionId String
+  stateId           String
+  name              String
+  durationHours     Int
+  warningPercent    Float           @default(80)
+  escalateOnBreach  Boolean         @default(false)
+  workflowVersion   WorkflowVersion @relation(fields: [workflowVersionId], references: [id], onDelete: Cascade)
+  state             WorkflowState   @relation(fields: [stateId], references: [id])
+}
+
+model Request {
+  id                String              @id @default(cuid())
+  requestTypeId     String
+  workflowVersionId String
+  currentStateId    String?
+  requesterId       String
+  assigneeId        String?
+  title             String
+  status            RequestStatus       @default(DRAFT)
+  priority          Priority            @default(MEDIUM)
+  stateEnteredAt    DateTime?
+  slaBreachedAt     DateTime?
+  slaWarningAt      DateTime?
+  submittedAt       DateTime?
+  completedAt       DateTime?
+  requestType       RequestType         @relation(fields: [requestTypeId], references: [id])
+  workflowVersion   WorkflowVersion     @relation(fields: [workflowVersionId], references: [id])
+  currentState      WorkflowState?      @relation(fields: [currentStateId], references: [id])
+  requester         User                @relation("RequesterRequests", fields: [requesterId], references: [id])
+  assignee          User?               @relation("AssigneeRequests", fields: [assigneeId], references: [id])
+  fieldValues       RequestFieldValue[]
+  comments          RequestComment[]
+  auditEvents       AuditEvent[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+}
+
+model RequestFieldValue {
+  id                String          @id @default(cuid())
+  requestId         String
+  fieldDefinitionId String
+  value             String
+  request           Request         @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  fieldDefinition   FieldDefinition @relation(fields: [fieldDefinitionId], references: [id])
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([requestId, fieldDefinitionId])
+}
+
+model RequestComment {
+  id         String   @id @default(cuid())
+  requestId  String
+  authorId   String
+  content    String
+  isInternal Boolean  @default(false)
+  request    Request  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  author     User     @relation(fields: [authorId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model AuditEvent {
+  id        String         @id @default(cuid())
+  requestId String?
+  userId    String?
+  eventType AuditEventType
+  metadata  Json?
+  request   Request?       @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  user      User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime       @default(now())
+}
